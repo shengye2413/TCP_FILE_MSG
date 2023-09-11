@@ -158,7 +158,6 @@ int main(int argc ,const char *argv[])
                     puts("get file failed");
                     else if(put==0)
                     puts("get end"); 
-                    break;
                 }
             }
             printf("客户端：%s退出\n",inet_ntoa(client_info.sin_addr));
