@@ -5,8 +5,9 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
-
-
+#include <pthread.h>
+#include <fcntl.h>
+#include <errno.h>
 //消息结构体
 typedef struct information 
 {
@@ -15,55 +16,79 @@ typedef struct information
     char str[0];
 }information;
 
+information what;
+
+typedef struct File
+{
+    char buf[512];
+    char status;
+}File;
 
 
 //下载文件
-int GetFile(information what,int sockfd)
-{
+void* GetFile(void *sockfd)
+{   
+    pthread_mutex_t mutex; 
+    pthread_mutex_init(&mutex,NULL);
+    pthread_mutex_lock(&mutex);
+    int sockfd_back=*((int *)sockfd);
+    printf("%s\n",what.buf);
     //打开或创建文件
     FILE *fd=fopen(what.buf,"w+");
     if (fd==NULL)
     {
-        puts("open file failed");
-        return -1;
+        perror("open file failed");
+        pthread_exit(0);
     }
 
     //循环读取并写入文件
-    char buf[512];
+    File file;
     int num;
-    while ((num=read(sockfd,buf,512))>0)
+
+    //ssize_t received = recv(sockfd_back, &file, sizeof(what), 0);
+
+    while (recv(sockfd_back, &file, sizeof(file), 0))
     {
-        fwrite(buf,num,1,fd);
+        if(file.status=='f')
+        //num=recv(sockfd_back,file.buf,sizeof(file.buf),0);
+        {
+            num=strlen(file.buf);
+            printf("%d\n",num);
+            fwrite(file.buf,1,num,fd);
+        }
+        if(file.status=='e')
+        break;
     }
     puts("file get");
 
     fclose(fd);
-    return 0;
+    pthread_mutex_unlock(&mutex);
+    pthread_exit(0);
 }
-
-//上传文件
-int PutFile(information what,int sockfd)
-{
-    //打开文件
-    FILE *fd=fopen(what.buf,"r+");
-    if (fd==NULL)
-    {
-        puts("open file failed");
-        return -1;
-    }
     
-    //循环读取写入套接字
-    int num;
-    char buf[512];
-    while ((num=fread(buf,512,1,fd))>0)
-    {
-        printf("%d\n",num);
-        write(sockfd,buf,num);
-    }
-    fclose(fd);
-    return 0;
+//上传文件
+// int PutFile(information what,int sockfd)
+// {
+//     //打开文件
+//     FILE *fd=fopen(what.buf,"r+");
+//     if (fd==NULL)
+//     {
+//         puts("open file failed");
+//         return -1;
+//     }
+    
+//     //循环读取写入套接字
+//     int num;
+//     char buf[512];
+//     while ((num=fread(buf,512,1,fd))>0)
+//     {
+//         printf("%d\n",num);
+//         write(sockfd,buf,num);
+//     }
+//     fclose(fd);
+//     return 0;
 
-}
+// }
 
 int main(int argc,const char *argv[])
 {
@@ -100,7 +125,6 @@ int main(int argc,const char *argv[])
     while (1)
     {
         //定义消息结构体
-        information what;
         printf("类型:");
         scanf("%d",&what.data);
         puts("消息：");
@@ -114,17 +138,18 @@ int main(int argc,const char *argv[])
         //当为下载文件时
         if(what.data==1)
         {
-            int get=GetFile(what,sockfd);
-            if(get==-1)
-            puts("get file failed");   
+            pthread_t pid;
+            pthread_create(&pid,NULL,GetFile,&sockfd);
+            pthread_join(pid,NULL);
+
         }
         //当为上传文件时
-        else if(what.data==2)
-        {
-            int put=PutFile(what,sockfd);
-            if(put==-1)
-            puts("put file failed");
-        }
+        // else if(what.data==2)
+        // {
+        //     int put=PutFile(what,sockfd);
+        //     if(put==-1)
+        //     puts("put file failed");
+        // }
     }
     close(sockfd);
 }

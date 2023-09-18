@@ -17,9 +17,17 @@ typedef struct information
     char str[0];
 }information;
 
+typedef struct File
+{
+    char buf[512];
+    char status;
+}File;
+
+
 //发送文件
 int PutFile(information what,int sock_son)
 {
+    File file;
     //读取文件
     int fd =open(what.buf,O_RDONLY);
     printf("%s\n",what.buf);
@@ -28,14 +36,16 @@ int PutFile(information what,int sock_son)
         perror("错误：");
         return -1;
     }
-    char str[512];
     int size;
     //循环把文件写入套接字
-    while ((size=read(fd,str,512))>0)
+    while ((size=read(fd,file.buf,512))>0)
     {
+        file.status='f';
         printf("%d\n",size);
-        write(sock_son,str,size);
+        write(sock_son,&file,size+1);
     }
+    file.status='e';
+    write(sock_son,&file,1);
     close(fd);
     return 0;
 }
@@ -52,7 +62,7 @@ int GetFile(information what,int sock_son)
     }
 
     //循环读取并写入文件
-    char buf[512];
+    char buf[512]={};
     int num;
     while ((num=read(sock_son,buf,512))>0)
     {
@@ -133,8 +143,9 @@ int main(int argc ,const char *argv[])
             {
                 //读取消息
                 information what;
-                if(recv(sock_son,&what,512,0)==0) 
-                break;
+                ssize_t received = recv(sock_son, &what, sizeof(what), 0);
+                if (received <= 0)
+                    break;
                 //判断为消息还是索取文件
                 if(what.data==0)
                 {
@@ -162,7 +173,6 @@ int main(int argc ,const char *argv[])
             }
             printf("客户端：%s退出\n",inet_ntoa(client_info.sin_addr));
             close(sock_son);
-            exit(0);
         }
     }
 }
